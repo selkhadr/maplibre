@@ -10,7 +10,6 @@ function App() {
 
   return (
     <div>
-      <h1>look here if it render</h1>
       <Map/>
     </div>
   );

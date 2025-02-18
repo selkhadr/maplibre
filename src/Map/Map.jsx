@@ -69,7 +69,7 @@ const Map = () => {
     }
   };
 
-  return <div ref={mapContainer} style={{ width: "1300px", height: "1300px" }} />;
+  return <div ref={mapContainer} style={{ width: "500px", height: "500px" }} />;
 };
 
 export default Map;
