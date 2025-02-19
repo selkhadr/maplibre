@@ -32,41 +32,26 @@ const Map = () => {
 
   const updateShips = (shipsData) => {
     const map = mapRef.current;
-    if (!map) return; // Make sure map is initialized
+    if (!map) return;
 
-    const geojson = {
-      type: "FeatureCollection",
-      features: shipsData.map((ship) => ({
-        type: "Feature",
-        geometry: {
-          type: "Point",
-          coordinates: [ship.longitude, ship.latitude],
-        },
-        properties: {
-          mmsi: ship.mmsi,
-          name: ship.name,
-        },
-      })),
-    };
-
+    // Remove existing markers before adding new ones.  Important for updates!
     if (map.getSource("ships")) {
-      map.getSource("ships").setData(geojson);
-    } else {
-      map.addSource("ships", {
-        type: "geojson",
-        data: geojson,
-      });
-
-      map.addLayer({
-        id: "ships-layer",
-        type: "circle",
-        source: "ships",
-        paint: {
-          "circle-radius": 5,
-          "circle-color": "blue",
-        },
-      });
+        map.removeLayer("ships-layer");
+        map.removeSource("ships");
     }
+
+
+    shipsData.forEach(ship => {
+      const marker = new maplibregl.Marker()
+        .setLngLat([ship.longitude, ship.latitude])
+        .setPopup(new maplibregl.Popup({ offset: 25 }) // add popups
+          .setHTML(`<h3>${ship.name}</h3><p>MMSI: ${ship.mmsi}</p>`))
+        .addTo(map);
+
+    });
+
+
+
   };
 
   return <div ref={mapContainer} style={{ width: "500px", height: "500px" }} />;
