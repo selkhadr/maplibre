@@ -1,57 +1,108 @@
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 const Map = () => {
   const mapContainer = useRef(null);
   const mapRef = useRef(null);
+  const [shipsData, setShipsData] = useState([]);
+  const [socket, setSocket] = useState(null); 
 
   useEffect(() => {
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: "https://demotiles.maplibre.org/style.json",
       center: [0, 0],
-      zoom: 0,
+      zoom: 2,
     });
 
     mapRef.current = map;
 
-    map.on('load', () => {
-      const shipsData = [
-        { longitude: -70, latitude: 40, mmsi: 1, name: "Ship 1" },
-        { longitude: -80, latitude: 35, mmsi: 2, name: "Ship 2" },
-        { longitude: -90, latitude: 80, mmsi: 3, name: "Ship 3" },
-        { longitude: 70, latitude: 30, mmsi: 3, name: "Ship 4" },
-        { longitude: 90, latitude: 30, mmsi: 3, name: "Ship 5" },
-      ];
-      updateShips(shipsData);
+    const ws = new WebSocket("ws://ideal-disco-56qq4759jqqcp6qv");
+    setSocket(ws); 
+
+    ws.onopen = () => {
+      console.log("WebSocket connection opened");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "ship_updates" || data.type === "initial_ships") { 
+          setShipsData(data.ships);
+          updateShips(data.ships);
+        } else if (data.type === "ship_update") { 
+          setShipsData(prevShips => {
+            const updatedShips = prevShips.map(ship =>
+              ship.mmsi === data.ship.mmsi ? data.ship : ship
+            );
+            return updatedShips;
+          });
+          updateShips(shipsData);
+        }
+      } catch (error) {
+        console.error("Error parsing or processing WebSocket message:", error, event.data);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket connection closed");
+      setSocket(null); 
+    };
+
+    map.on("load", () => {
     });
 
-    return () => map.remove();
-  }, []);
+    return () => {
+      map.remove();
+      if (ws) {
+        ws.close(); 
+      }
+    };
+  }, []); 
 
   const updateShips = (shipsData) => {
+    // ... (This function remains the same as in the previous example)
     const map = mapRef.current;
     if (!map) return;
 
-    // Remove existing markers before adding new ones.  Important for updates!
+    const geojson = {
+      type: "FeatureCollection",
+      features: shipsData.map((ship) => ({
+        type: "Feature",
+        geometry: {
+          type: "Point",
+          coordinates: [ship.longitude, ship.latitude],
+        },
+        properties: {
+          mmsi: ship.mmsi,
+          name: ship.name || `Ship ${ship.mmsi}`, // Default name
+        },
+      })),
+    };
+
     if (map.getSource("ships")) {
-        map.removeLayer("ships-layer");
-        map.removeSource("ships");
+      map.getSource("ships").setData(geojson);
+    } else {
+      map.addSource("ships", {
+        type: "geojson",
+        data: geojson,
+      });
+
+      map.addLayer({
+        id: "ships-layer",
+        type: "circle",
+        source: "ships",
+        paint: {
+          "circle-radius": 5,
+          "circle-color": "blue",
+        },
+      });
     }
-
-
-    shipsData.forEach(ship => {
-      const marker = new maplibregl.Marker()
-        .setLngLat([ship.longitude, ship.latitude])
-        .setPopup(new maplibregl.Popup({ offset: 25 }) // add popups
-          .setHTML(`<h3>${ship.name}</h3><p>MMSI: ${ship.mmsi}</p>`))
-        .addTo(map);
-
-    });
-
-
-
   };
 
   return <div ref={mapContainer} style={{ width: "500px", height: "500px" }} />;
